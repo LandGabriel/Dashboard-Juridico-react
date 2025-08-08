@@ -17,7 +17,8 @@ import {
   PieChart,
   Check,
   Loader,
-  AlertCircle
+  AlertCircle,
+  ExternalLink
 } from 'lucide-react';
 
 // A biblioteca será carregada via index.html
@@ -228,7 +229,7 @@ const App = () => {
             </div>
             
             <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-200">
-                <ActionButton newStatus="confirmada" text="Realizada" icon={Check} color={{bg: "bg-green-200", text: "text-green-800"}} />
+                <ActionButton newStatus="confirmada" text="Confirmada" icon={Check} color={{bg: "bg-green-200", text: "text-green-800"}} />
                 <ActionButton newStatus="pendente" text="Pendente" icon={Loader} color={{bg: "bg-yellow-200", text: "text-yellow-800"}} />
                 <ActionButton newStatus="urgente" text="Urgente" icon={AlertCircle} color={{bg: "bg-red-200", text: "text-red-800"}} />
             </div>
@@ -238,7 +239,6 @@ const App = () => {
     );
   };
 
-  // --- MUDANÇA 1: Novo componente de gráfico de barras ---
   const BarChart = ({ data, title, colorClass = 'bg-blue-500' }) => {
     if (!data || data.length === 0) {
       return (
@@ -280,7 +280,6 @@ const App = () => {
     );
   };
 
-  // --- MUDANÇA 2: Lógica para processar os dados para os gráficos ---
   const chartData = useMemo(() => {
     if (uploadedData.length === 0) {
       return { dataPorUF: [], dataPorAdvogado: [], dataPorStatus: [] };
@@ -305,6 +304,53 @@ const App = () => {
     return { dataPorUF, dataPorAdvogado, dataPorStatus };
   }, [uploadedData]);
 
+  // --- MUDANÇA 1: Funções de formatação para a tabela ---
+  const formatarDataTabela = (dateValue) => {
+    if (!dateValue) return '';
+    if (typeof dateValue === 'number') {
+      const excelEpoch = new Date(1899, 11, 30);
+      const date = new Date(excelEpoch.getTime() + dateValue * 24 * 60 * 60 * 1000);
+      return date.toLocaleDateString('pt-BR');
+    }
+    return String(dateValue);
+  };
+
+  const formatarHorarioTabela = (horarioValue) => {
+    if (!horarioValue) return '';
+    if (typeof horarioValue === 'number' && horarioValue >= 0 && horarioValue < 1) {
+      const totalSeconds = Math.round(horarioValue * 24 * 60 * 60);
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+      return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }
+    return String(horarioValue);
+  };
+
+  // --- MUDANÇA 2: Função para renderizar o conteúdo da célula de forma inteligente ---
+  const renderTableCell = (header, value) => {
+    const key = header.toUpperCase();
+    
+    switch(key) {
+      case 'DATA':
+        return formatarDataTabela(value);
+      case 'HORÁRIO':
+        return formatarHorarioTabela(value);
+      case 'LINK':
+        if (value && String(value).startsWith('http')) {
+          return (
+            <a href={value} target="_blank" rel="noopener noreferrer" className="inline-flex items-center space-x-1 text-blue-600 hover:text-blue-800 hover:underline">
+              <span>Abrir Link</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          );
+        }
+        return String(value);
+      default:
+        // Limita o tamanho do texto para evitar quebra de layout
+        return String(value).substring(0, 100) + (String(value).length > 100 ? '...' : '');
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans">
@@ -315,7 +361,7 @@ const App = () => {
               <div className="bg-blue-600 p-2 rounded-lg">
                 <Gavel className="w-6 h-6 text-white" />
               </div>
-              <h1 className="text-2xl font-bold text-gray-900">Painel de Controle Jurídico</h1>
+              <h1 className="text-2xl font-bold text-gray-900">Power BI Jurídico</h1>
             </div>
             
             <div className="flex items-center space-x-6">
@@ -375,7 +421,7 @@ const App = () => {
         {activeTab === 'audiencias' && (
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <StatCard title="Realizadas" value={stats.confirmadas} icon={CheckCircle} color="text-green-600" />
+              <StatCard title="Confirmadas" value={stats.confirmadas} icon={CheckCircle} color="text-green-600" />
               <StatCard title="Pendentes" value={stats.pendentes} icon={Clock} color="text-yellow-600" />
               <StatCard title="Urgentes" value={stats.urgentes} icon={AlertTriangle} color="text-red-600" />
               <StatCard title="Total de Hoje" value={stats.total} icon={Calendar} color="text-blue-600" />
@@ -425,7 +471,6 @@ const App = () => {
           </div>
         )}
 
-        {/* --- MUDANÇA 3: A aba Dashboard agora renderiza os novos gráficos --- */}
         {activeTab === 'dashboard' && (
           <div className="space-y-6">
             {uploadedData.length === 0 ? (
@@ -446,8 +491,9 @@ const App = () => {
           </div>
         )}
 
+        {/* --- MUDANÇA 3: Tabela de dados redesenhada --- */}
         {activeTab === 'tabela' && (
-          <div className="bg-white rounded-lg shadow border">
+          <div className="bg-white rounded-lg shadow border overflow-hidden">
             <div className="px-6 py-4 border-b">
               <h2 className="text-xl font-semibold text-gray-900">Dados Completos da Planilha</h2>
             </div>
@@ -463,7 +509,7 @@ const App = () => {
                   <thead className="bg-gray-50">
                     <tr>
                       {Object.keys(uploadedData[0]).map(key => (
-                        <th key={key} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th key={key} className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
                           {key}
                         </th>
                       ))}
@@ -471,10 +517,12 @@ const App = () => {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {uploadedData.map((row, index) => (
-                      <tr key={index} className="hover:bg-gray-50">
-                        {Object.values(row).map((value, idx) => (
-                          <td key={idx} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {String(value)}
+                      <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                        {Object.keys(row).map((key) => (
+                          <td key={key} className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
+                            <div className="max-w-xs truncate" title={row[key]}>
+                              {renderTableCell(key, row[key])}
+                            </div>
                           </td>
                         ))}
                       </tr>
